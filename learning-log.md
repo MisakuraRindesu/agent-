@@ -1,9 +1,9 @@
-# 学习历程总结:Stage 0 → CLI-3
+# 学习历程总结:Stage 0 → CLI-4
 
 > **项目**:[awesome-agentic-ai-zh](https://github.com/WenyuChiou/awesome-agentic-ai-zh) — AI Agent 中文学习地图
 > **路线**:Track A — CLI Power User(本地 Ollama 零费用路径)
 > **语言版本**:简体中文(`*.zh-Hans.md`)
-> **进度**:Stage 0 ✅ → Stage 1 ✅ → Stage 2 ✅ → A1 / CLI-1 ✅ → A1 / CLI-2 ✅ → A1 / CLI-3 ✅
+> **进度**:Stage 0 ✅ → Stage 1 ✅ → Stage 2 ✅ → A1 / CLI-1 ✅ → A1 / CLI-2 ✅ → A1 / CLI-3 ✅ → A1 / CLI-4 ✅
 
 ---
 
@@ -17,7 +17,8 @@
   - [A1 / CLI-1 — CLI Agent 实操](#-a1--cli-1--cli-agent-实操)
   - [A1 / CLI-2 — 项目规则文件与边界守护](#-a1--cli-2--项目规则文件与边界守护)
   - [A1 / CLI-3 — 换第二个 harness 做公平对比](#-a1--cli-3--换第二个-harness-做公平对比)
-- [三、贯穿全程的 11 条核心教训](#三贯穿全程的-11-条核心教训)
+  - [A1 / CLI-4(实战替代)— 推送通道排查](#-a1--cli-4实战替代--推送通道排查https-被阻断ssh-可用)
+- [三、贯穿全程的 12 条核心教训](#三贯穿全程的-12-条核心教训)
 - [四、可复用工具箱](#四可复用工具箱)
 - [五、成绩存档](#五成绩存档)
 - [六、下一步待办](#六下一步待办)
@@ -27,7 +28,7 @@
 ## 一、路线回顾
 
 ```text
-Stage 0 基础准备 ✅ → Stage 1 LLM 基础 ✅ → Stage 2 Prompt 设计 ✅ → A1(CLI-1 ✅ / CLI-2 ✅ / CLI-3 ✅)
+Stage 0 基础准备 ✅ → Stage 1 LLM 基础 ✅ → Stage 2 Prompt 设计 ✅ → A1(CLI-1 ✅ / CLI-2 ✅ / CLI-3 ✅ / CLI-4 ✅)
 ```
 
 Track A 的完整路线为 **A1 → A2 → Stage 5 → A3 → Stage 8**,其中 Stage 0–2 是 Track A / B 的**共用基础**。
@@ -488,7 +489,67 @@ warming up the model ... CUDA error: shared object initialization failed
 
 ---
 
-## 三、贯穿全程的 11 条核心教训
+### 🟠 A1 / CLI-4(实战替代)— 推送通道排查:HTTPS 被阻断,SSH 可用
+
+**背景**:把学习进度同步到 GitHub 时,撞上一个与 Agent 无关、但每个开发者都会遇到的问题:**当前网络环境阻断了 GitHub 的 HTTPS 通道**。教材 CLI-4 原本练"用假凭证观察认证失败",而这次遇到的是一次**真实的认证/通道故障**——性质相同,价值更高。
+
+#### 排查过程(分层定位)
+
+| # | 命令 | 结果 |
+|---|---|---|
+| 1 | `git clone https://github.com/...` | ❌ `schannel: AcquireCredentialsHandle failed: SEC_E_NO_CREDENTIALS` |
+| 2 | `curl.exe https://github.com` | ❌ 同样的 schannel 错误 |
+| 3 | `npm install -g opencode-ai` | ✅ **成功** → 网络本身是通的,嫌疑锁定在 **git 的 TLS 栈** |
+| 4 | `git config --global http.sslBackend openssl` | 把 git 从 schannel 切到 OpenSSL 后端 |
+| 5 | `git ls-remote https://github.com/...`(openssl) | ❌ `Operation too slow. Less than 1000 bytes/sec ...` |
+| 6 | `node -e "require('https').get('https://github.com/...')"` | ❌ `connect ETIMEDOUT 20.205.243.166:443` → **TCP 层就被阻断** |
+| 7 | `ssh -T git@github.com` | ✅ **握手成功**:`Permission denied (publickey)`(只差公钥) |
+| 8 | `ssh -T -p 443 git@ssh.github.com` | ✅ **也通**(SSH 备用端口可用) |
+
+#### 结论
+
+> **`github.com:443`(HTTPS)被网络阻断;`github.com:22` 与 `ssh.github.com:443`(SSH)可用。**
+> 既不是 git 配置问题,也不是代理问题 —— 而是网络策略层面的差异。
+
+#### 解决:改用 SSH 通道
+
+```powershell
+# 1. 生成密钥（一路回车，passphrase 可留空）
+ssh-keygen -t ed25519 -C "<你的邮箱>"
+
+# 2. 复制公钥内容
+Get-Content $env:USERPROFILE\.ssh\id_ed25519.pub
+
+# 3. 添加到 GitHub：https://github.com/settings/ssh/new
+
+# 4. 验证认证
+ssh -T git@github.com
+# → Hi <用户名>! You've successfully authenticated...
+
+# 5. 切换 remote 到 SSH 并推送
+git remote set-url origin git@github.com:<用户名>/<repo>.git
+git push -u origin main
+# → * [new branch] main -> main   ✅
+```
+
+**结果**:`31 objects · 118.49 KiB`,推送成功;本地与远端 `main...origin/main` 一致。
+
+#### 可复用经验
+
+| 经验 | 说明 |
+|---|---|
+| **分层排查** | 应用层(git)→ TLS 后端(schannel / openssl)→ TCP 层(curl / node)→ 更换通道(SSH) |
+| **准备一个"干净对照组"** | `npm install` 成功 → 网络可用,问题在 git 的 TLS 栈;`node https` 超时 → TCP 层被阻断 |
+| **HTTPS 不通就换 SSH** | SSH 不依赖系统 TLS 栈,常能绕过企业/校园网络对 HTTPS 的限制 |
+| **备用端口** | 22 被封时用 `ssh.github.com:443`(在 `~/.ssh/config` 配 `HostName` + `Port`) |
+| **PAT vs SSH** | HTTPS 需 PAT;SSH 一次配置长期免 token —— 通道可用时优先 SSH |
+| **受限执行环境** | 沙箱里 SSH 可能因无法创建管道而失败(`couldn't create signal pipe`),推送需在普通终端执行 |
+
+> 💡 **与 Agent 学习的关联**:这套"**分层定位 → 找对照组 → 换通道**"的思路,与 Stage 7 的"错误分类与恢复"、以及工具调用失败时"先判断是哪一层出问题"完全同源。
+
+---
+
+## 三、贯穿全程的 12 条核心教训
 
 | # | 教训 | 出处 |
 |---|---|---|
@@ -503,6 +564,7 @@ warming up the model ... CUDA error: shared object initialization failed
 | 9 | **规则文件的效力取决于措辞:优先级声明 + 堵住例外 + 固定拒绝话术** | A1 / CLI-2 |
 | 10 | **规则管"想不想做",权限门管"能不能做";权限门与 git 才是硬边界** | A1 / CLI-2 |
 | 11 | **默认参数是隐藏的坑:Ollama `num_ctx` 默认 4096,而模型支持 131072 → 模型"看不见"你的指令** | A1 / CLI-3 |
+| 12 | **排查环境问题要分层:应用层 → TLS 层 → TCP 层 → 换通道;并准备一个"干净对照组"** | A1 / CLI-4 |
 
 ---
 
@@ -536,6 +598,7 @@ aider --model ollama_chat/gemma4:e4b --edit-format udiff --no-auto-commits --no-
 | 中文文件乱码 | `Get-Content xxx -Encoding utf8` |
 | git 里到底有什么 | `git ls-files` / `git status` / `git log --oneline` |
 | 撤销 agent 改动 | `git restore <文件>` |
+| GitHub HTTPS 不通 | ① `ssh -T git@github.com` 测 SSH 通道 ② `node -e "require('https').get('https://github.com')"` 测 TCP 层 ③ 通就 `git remote set-url origin git@github.com:<用户>/<repo>.git` 换 SSH |
 
 ### 指令写法对照
 
@@ -629,7 +692,7 @@ git ls-files <路径>                                      # 确认文件真的�
 - [ ] **CLI-2 加练(稳健性)**:同条件重跑实验 3 两次,把"单次观察"升级为"可重复结论"
 - [x] **CLI-3**:OpenCode 1.18.31 对比完成 → 抓到 `num_ctx` 默认 4096 的隐蔽坑、6GB 显存硬件限制、"知道 ≠ 遵守"、权限门是唯一防线
 - [ ] **CLI-3 加练(可选)**:① 批准版对照(选 `allow once`,看弱模型是否真改坏文件,再用 git 恢复);② 换回 gemma4(8K 上下文)看它在 OpenCode 下是否也拒绝(控制"模型能力"变量)
-- [ ] **CLI-4**:用假凭证观察认证失败,区分"登录失败 / key 失败 / 模型名不存在 / 权限阻挡"
+- [x] **CLI-4(实战替代)**:以真实的"推送通道排查"完成 —— HTTPS 被阻断(TCP 层超时)→ 实测 SSH 通道可用 → 改用 SSH 推送成功
 - [ ] 后续主线:**A2 → Stage 5 → A3 → Stage 8**
 
 ### 备用方案(如果本地模型力不从心)
