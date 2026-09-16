@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# 编辑器 / 系统
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# 密钥与本地配置（绝不提交）
+.env
+.env.*
+*.key
+*.pem
+secrets/
+
+# Aider 运行缓存（会话历史已归档到 a1-cli-agent/experiments/）
+.aider.tags.cache.v4/
+.aider.tags.cache*/
