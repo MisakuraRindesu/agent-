@@ -21,7 +21,8 @@
 | **A1 · CLI-4** | 推送通道排查(实战替代):HTTPS 被阻断 → SSH 可用 → 推送成功 | ✅ |
 | **A2 · CLI-5** | 四字段规则卡(用途 / 不可做 / 验证 / 回报) | ✅ |
 | **A2 · CLI-6** | 只读 review Skill(`.agents/skills/review-changes/`) | ✅ |
-| **A2 · CLI-7/8** | 任务拆解 / portable prompt 对照卡 | ⬜ 可选 |
+| **A2 · CLI-7** | 任务拆解(盘点 → 修改 → 验证 → 回报) | ✅ |
+| **A2 · CLI-8** | portable prompt 对照卡 | ⬜ 可选 |
 | **Stage 5** | Claude Code 生态:MCP / Skills / Plugins / Hooks / Subagents | ⬜ 下一站 |
 
 > 📖 **完整学习总结见 [`learning-log.md`](learning-log.md)** —— 包含每个 bug 的现象 / 原因 / 解决 / 教训,以及 12 条核心教训与可复用工具箱。
