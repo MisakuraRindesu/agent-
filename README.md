@@ -22,10 +22,10 @@
 | **A2 · CLI-5** | 四字段规则卡(用途 / 不可做 / 验证 / 回报) | ✅ |
 | **A2 · CLI-6** | 只读 review Skill(`.agents/skills/review-changes/`) | ✅ |
 | **A2 · CLI-7** | 任务拆解(盘点 → 修改 → 验证 → 回报) | ✅ |
-| **A2 · CLI-8** | portable prompt 对照卡 | ⬜ 可选 |
+| **A2 · CLI-8** | portable prompt 对照卡(Aider vs OpenCode,**同模型单变量对比**) | ✅ |
 | **Stage 5** | Claude Code 生态:MCP / Skills / Plugins / Hooks / Subagents | ⬜ 下一站 |
 
-> 📖 **完整学习总结见 [`learning-log.md`](learning-log.md)** —— 包含每个 bug 的现象 / 原因 / 解决 / 教训,以及 12 条核心教训与可复用工具箱。
+> 📖 **完整学习总结见 [`learning-log.md`](learning-log.md)** —— 包含每个 bug 的现象 / 原因 / 解决 / 教训,以及 13 条核心教训与可复用工具箱。
 
 ---
 
@@ -34,7 +34,7 @@
 ```text
 .
 ├── README.md                       # 本文件：进度总览
-├── learning-log.md                 # 完整学习总结（12 条核心教训 + 工具速查）
+├── learning-log.md                 # 完整学习总结（13 条核心教训 + 工具速查）
 ├── stage0-foundations/             # Stage 0：GitHub API 数据小工具
 │   ├── github-profile.py
 │   └── result.txt
@@ -47,6 +47,10 @@
 │   ├── practice_2_2.py             #   Zero-Shot vs Few-Shot（六题评分）
 │   ├── practice_2_3.py             #   边界题 + Iterative Refinement
 │   └── practice_2_4.py             #   多轮统计版（3 轮平均分对比）
+├── a2-cli/cli-8/                   # A2 / CLI-8：portable prompt 对照卡
+│   ├── portable-prompt.md          #   四字段任务核心 + "哪些东西不 portable"
+│   ├── comparison-card.md          #   跨工具对照表 + 两轮成功条件判定
+│   └── evidence/                   #   两轮的 git diff 原始证据（Aider / OpenCode）
 └── a1-cli-agent/                   # A1 / A2：CLI Agent 实操的演示仓库
     ├── AGENTS.md                   #   项目规则（四字段：用途/不可做/验证/回报）
     ├── .aider.conf.yml             #   让 Aider 自动加载 AGENTS.md
@@ -89,6 +93,19 @@
 | 2b | 强化(优先级 + 拒绝话术) | 拒绝 | ✅ 引用规则拒绝 | 零破坏 |
 | 3 | 强化(同上) | **批准** | ✅ **仍然拒绝** | 零破坏 |
 
+### A2 / CLI-8 — 同一份 prompt,两个 harness(同模型 `qwen2.5:3b`)
+
+| 维度 | Aider 0.86.2 | OpenCode 1.18.31 |
+|---|---|---|
+| 规则文件 `AGENTS.md` | ⚠️ **要显式配置**(`.aider.conf.yml` 的 `read:`) | ✅ **原生自动加载** |
+| 写盘前门禁 | ❌ 无 | ✅ `△ Permission required` |
+| 编辑实现 | 编辑格式契约(模型吐 diff → 工具解析) | 工具调用(`Read` / `Edit` / `Write`) |
+| `git diff --check` | ❌ `exit=2`(尾随空格) | ✅ `exit=0` |
+| 原有内容完好 | ⚠️ 多 2 个尾随空格 | ⚠️ 少 2 个空行 + **全文 CRLF→LF** |
+| 真的跑了验证命令 | ❌ 完全没跑 | ❌ 声称要跑,**从未调用 Bash** |
+
+> **结论:任务核心(四字段)portable,设置完全不 portable;换 harness 还会改变模型的行为表现。**
+
 ---
 
 ## 💡 核心结论(摘自学习总结)
@@ -104,6 +121,7 @@
 9. **"能复述规则" ≠ "会遵守规则"**:知道与做到之间隔着"指令遵循能力"。
 10. **默认参数是隐藏的坑**:Ollama `num_ctx` 默认 4096,而模型支持 131072 —— 上下文不够时,模型会"看不见"你的指令。
 11. **零费用本地栈的瓶颈是硬件**:6GB 显存跑不动"8B 多模态模型 + 32K 上下文"。
+12. **Portable 的是任务核心,不是设置**:同一份四字段 prompt 在两个工具上都跑通,但**编辑格式 / 权限开关 / 规则加载方式在对方工具里没有对应物**;换 harness 还会改变模型暴露的短板(Aider 栽在输出契约,OpenCode 栽在参数构造)。
 
 ---
 
@@ -132,3 +150,4 @@
 - 本仓库是**个人学习记录**,不是教程;代码为练习产物,可能包含刻意保留的"错误示范"。
 - 所有实验均在**可丢弃的 demo 仓库**中进行,并全程使用 git 作为安全网。
 - 未包含任何 API key / 凭据;`opencode.json` 中的 `apiKey: "ollama"` 是本地 Ollama 的占位值。
+- 本地模型连接踩过一个隐蔽坑:**Windows 系统代理**。`httpx`(Aider / litellm 的底层)会读注册表代理却拿不到绕过列表,于是把 `http://localhost:11434` 也丢给代理,报 **502 Bad Gateway**;而 `curl.exe` 和 `requests` 都正常。修法:`$env:NO_PROXY = "localhost,127.0.0.1,::1"`。详见 [`learning-log.md`](learning-log.md)。

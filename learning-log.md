@@ -676,6 +676,77 @@ git ls-files docs                              # ★ 证明它真的在 git 里
 > 1. **"追加内容"要用 `Edit`,不是 `Write`** —— 弱模型分不清两者语义,`Write` 会清空未提及的内容
 > 2. **权限门保护"动作",不保护"内容质量"** —— 内容质量只能靠 git + 人看 diff
 
+#### CLI-8:portable prompt 对照卡
+
+**目标**(教材):保留同一个**任务核心**,并清楚标出换工具时要修改的**文件名、权限、命令和启用方式**。
+
+**四字段核心**(两轮一字不改):
+
+```text
+任务：给 README.md 补一段"如何运行测试"的说明，命令为 python test_calculator.py
+范围：只修改 README.md；不新增文件、不改其他文件
+禁止事项：不要 git commit、不要 git push、不要碰 data/ 目录
+成功条件：README.md 中出现"如何运行测试"章节；git diff 只显示这一处改动；原有内容完好
+```
+
+> 四字段里**故意不含**任何工具特有的东西:不写编辑格式、不写权限开关、不写命令行参数、不写规则文件名。
+> **两轮用同一个模型 `qwen2.5:3b`** —— 这样"工具"是唯一变量。
+
+**跨工具对照表**
+
+| 维度 | Aider v0.86.2 | OpenCode 1.18.31 |
+|---|---|---|
+| 模型 / provider | `ollama_chat/qwen2.5:3b` / Ollama 本地 | `qwen2.5:3b (local)`(状态栏 `▣ Build · qwen2.5:3b (local)`) |
+| **project-instructions 文件名** | `AGENTS.md`,⚠️ **非原生** —— 靠 `.aider.conf.yml` 的 `read:` 显式加载 | `AGENTS.md`,✅ **原生自动加载**,零配置 |
+| **Skill 位置** | ❌ **无 Skill 机制** | `.agents/skills/`(本轮任务未触发) |
+| **shell / sandbox 权限** | ❌ **无运行时门禁**;靠 `--no-auto-commits` + "文件在不在 chat 里" | ✅ **运行时门禁** `△ Permission required` → `Allow once`(`permission.edit: ask`) |
+| **工具名称** | ❌ 无工具调用;编辑 = **编辑格式契约**(模型吐 diff → 工具解析 → 写盘) | ✅ `→Read` → `←Edit` → `←Write` |
+| **登录 / 费用** | 无需登录;**$0** | 无需登录;**$0** |
+
+**结果并排**
+
+| 成功条件 | Aider | OpenCode |
+|---|---|---|
+| 出现"如何运行测试"章节 | ✅ | ✅ 但写成 **H1**,且追加在文末 |
+| `git diff` 只显示这一处改动 | ✅ 单文件单处 | ⚠️ 同一个 hunk 里**还删掉了 2 个空行** |
+| 原有内容完好 | ⚠️ 第 3 行多了 **2 个尾随空格** | ⚠️ 少了 2 个空行 + **全文换行符 CRLF→LF** |
+| (附加)`git diff --check` | ❌ `exit=2`:trailing whitespace | ✅ `exit=0` |
+| (附加)未 commit / 未碰 `data/` / 无新增文件 | ✅ ✅ ✅ | ✅ ✅ ✅ |
+| (附加)**真的跑了验证命令** | ❌ 完全没跑 | ❌ **声称"Next, I will run the git diff",但 Bash 审批根本没弹 = 从未调用 Bash** |
+
+**换行符实测**(OpenCode 的 `Write` 是整文件重写):
+
+| | CRLF | bare-LF | bytes |
+|---|---|---|---|
+| HEAD 原始 `README.md` | 12 | 0 | 258 |
+| OpenCode 写完 | **0** | **15** | 301 |
+
+```
+warning: in the working copy of 'README.md', LF will be replaced by CRLF the next time Git touches it
+```
+
+> `core.autocrlf=true` 把这层差异**盖住了**。该仓库若没开 autocrlf,`git diff` 会显示**几乎每一行都改了** —— 这是 `Write` 整文件覆写最隐蔽的代价。
+
+**两个工具各自的坑**
+
+*Aider 侧*
+- **尾随空格**:终端里 `-` / `+` 两行看起来一模一样,`git diff --check` 才揭示行尾多了 2 个空格(Markdown 硬换行,渲染会变)
+- **⚠️ 时间陷阱(本次最大的操作教训)**:在 `Add file to the chat?` 提示符**还挂着**时去 `git status`,看到的是**干净工作区**,于是误判"agent 什么都没做"。实际上 **Aider 是在答完 `n`、会话继续之后才落盘的**。
+  → **判断 agent 有没有改文件,必须在退出工具之后再看 `git status`。中途看 = 看半成品。**
+
+*OpenCode 侧*
+- **工具选对了,参数填不出来**:模型把工具 schema 里的模板占位符 `{%include oldString%}` **原样当成内容**传给 `Edit`(CLI-6 那个 `Skill ""` 的升级版:工具识别 ≠ 参数构造)
+- **退回 `Write` 整文件覆写**:`Edit` 失败后不换参数重试,直接整文件重写 → 换行符全改 + 空行丢失
+- **层级写错**:新章节用 `#`(H1),和文档主标题同级,把文档劈成两半。"出现章节"字面满足,结构上错
+- **自述内容 = 另一个文件**:写完报告 "Here's the new content: … **用途** … 测试使用 Python 标准库 unittest" —— 那是 **`AGENTS.md`** 的正文!原生自动加载规则文件后,弱模型把"规则文件"和"目标文件"混了
+
+**CLI-8 结论**
+
+> 1. 四字段 prompt 一字不改,两个工具**都跑通了** → "任务核心"确实 portable。
+> 2. 但"**设置**"完全不 portable:同一个编辑动作,Aider 要 `--edit-format`,OpenCode 要 `permission.edit: ask` —— **这两个开关在对方工具里都没有对应物**。
+> 3. **同一个弱模型,在不同 harness 下暴露的短板不一样**:Aider 下栽在"输出契约 + 空白字符";OpenCode 下栽在"参数构造 + 自述准确性"。→ **harness 不是壳,它会改变模型的行为表现。**
+> 4. 两个工具**都没做自我验证** —— 而"验证"恰是四字段规则卡里最容易被跳过、也最值钱的一栏。
+
 #### A2 结论
 
 | 层 | 结论 |
@@ -684,11 +755,13 @@ git ls-files docs                              # ★ 证明它真的在 git 里
 | **Skill** | 按需加载;依赖模型的**工具选择**能力,3B 级模型难以可靠使用 |
 | **多步骤流程** | 弱模型会丢步骤(尤其"验证"步骤);靠"每步有可见结果 + 人独立验证"才能发现 |
 | **共同点** | 都是**文字指令,不是绝对防护**(教材安全底线原话) |
+| **跨工具迁移** | 任务核心(四字段)portable;**设置完全不 portable** —— 编辑格式 / 权限开关 / 规则加载方式各自为政 |
+| **换 harness 不是换壳** | 同一模型在 Aider 与 OpenCode 下暴露的短板不同(输出契约 vs 参数构造),**行为表现随 harness 变** |
 | **兜底** | 权限门 + git;**明确指出工具**(如"用 Bash 执行")能显著提升弱模型成功率 |
 
 ---
 
-## 三、贯穿全程的 12 条核心教训
+## 三、贯穿全程的 13 条核心教训
 
 | # | 教训 | 出处 |
 |---|---|---|
@@ -704,6 +777,7 @@ git ls-files docs                              # ★ 证明它真的在 git 里
 | 10 | **规则管"想不想做",权限门管"能不能做";权限门与 git 才是硬边界** | A1 / CLI-2 |
 | 11 | **默认参数是隐藏的坑:Ollama `num_ctx` 默认 4096,而模型支持 131072 → 模型"看不见"你的指令** | A1 / CLI-3 |
 | 12 | **排查环境问题要分层:应用层 → TLS 层 → TCP 层 → 换通道;并准备一个"干净对照组"** | A1 / CLI-4 |
+| 13 | **Portable 的是任务核心,不是设置;换 harness 会改变模型的行为表现** —— 同一 prompt 两个工具都跑通,但编辑格式/权限开关在对方工具里没有对应物 | A2 / CLI-8 |
 
 ---
 
@@ -714,6 +788,7 @@ git ls-files docs                              # ★ 证明它真的在 git 里
 ```powershell
 $env:OLLAMA_API_BASE = "http://127.0.0.1:11434"
 $env:LITELLM_LOCAL_MODEL_COST_MAP = "True"
+$env:NO_PROXY = "localhost,127.0.0.1,::1"   # ★ 关掉 Python 对系统代理的读取（见下方「先查系统代理」）
 
 aider --model ollama_chat/gemma4:e4b --edit-format udiff --no-auto-commits --no-show-model-warnings README.md
 ```
@@ -733,6 +808,7 @@ aider --model ollama_chat/gemma4:e4b --edit-format udiff --no-auto-commits --no-
 |---|---|
 | 端口被占 | `netstat -ano \| findstr 11434` → `tasklist \| findstr <PID>` |
 | Ollama 是否活着 | `curl.exe http://localhost:11434/api/version` |
+| 本地 API 报 **502 Bad Gateway**(但 `curl.exe` 正常) | `python -c "import urllib.request as u; print(u.getproxies())"` → 输出里有 `http`/`https` 键就是被系统代理劫持;设 `$env:NO_PROXY="localhost,127.0.0.1,::1"` |
 | 模型列表 / 加载状态 | `ollama list` / `ollama ps` |
 | 中文文件乱码 | `Get-Content xxx -Encoding utf8` |
 | git 里到底有什么 | `git ls-files` / `git status` / `git log --oneline` |
@@ -793,6 +869,42 @@ setx OLLAMA_CONTEXT_LENGTH 32768 # 调大默认上下文
 > 症状:模型答非所问、无视指令、说"用户还没给任务"、输出里出现 `<|channel>thought` 之类特殊标记。
 > 根因多半是 **system prompt 超长被截断**,而不是模型能力问题。
 
+### 本地模型连不上时先查系统代理(CLI-8 血泪经验)
+
+```powershell
+# 症状：Aider / litellm 报 502 Bad Gateway，但 curl.exe 直连 Ollama 完全正常
+python -c "import urllib.request as u; print(u.getproxies())"
+# → {'http': 'http://127.0.0.1:7890', 'https': 'http://127.0.0.1:7890', 'ftp': ...}
+#    注意：没有 'no' 键 = 一个地址都不绕过，连 localhost 都会被丢给代理
+
+# ★ 修复（只影响当前窗口里的 Python 程序）
+$env:NO_PROXY = "localhost,127.0.0.1,::1"
+$env:OLLAMA_API_BASE = "http://127.0.0.1:11434"
+# 验证：应该只剩 no 键，不再有 http/https
+python -c "import urllib.request as u; print(u.getproxies())"
+# → {'no': 'localhost,127.0.0.1,::1'}
+```
+
+**原理**:`urllib.request.getproxies()` 的实现是
+
+```python
+return getproxies_environment() or getproxies_registry()
+```
+
+只要 `NO_PROXY` 让环境变量那半边非空,就 **`or` 短路,完全不读 Windows 注册表** —— Python 从此看不到任何代理。
+
+**三层客户端对照**(诊断利器):
+
+| 客户端 | 读注册表代理? | 有绕过列表? | 结果 |
+|---|---|---|---|
+| `curl.exe` | ❌ 不读 | — | 直连 **200** ✅ |
+| Python `requests` | ✅ 读 | ✅ 认 `ProxyOverride` 里的 `localhost;127.*` | **200** ✅ |
+| **Python `httpx`** | ✅ 读(`getproxies()`) | ❌ **拿不到绕过列表** | 丢给代理 → **502** ❌ |
+
+> **Aider 的 Ollama 客户端和 litellm 都走 httpx** —— 所以只有它中招。
+> ⚠️ 副作用:这会让该窗口里**所有** Python 程序都不走代理(包括 `pip install`)。**别用 `setx` 永久化**,换窗口做联网的事即可。
+> 诊断脚本:[`proxy-probe.py`](a2-cli/cli-8/proxy-probe.py) —— 对比 `httpx` / `requests` / `ollama` 三种客户端访问本地 Ollama 的结果
+
 ### 数据救援命令(agent 破坏后的恢复)
 
 ```powershell
@@ -814,6 +926,7 @@ git ls-files <路径>                                      # 确认文件真的�
 | **A1 / CLI-1** | ✅ 读取 → 计划 → 批准 → 编辑 → diff 验收 → 撤销 完整闭环;**可用配置 Aider + gemma4:e4b + `--edit-format udiff`**;记录 3 个 agent 行为反例 |
 | **A1 / CLI-2** | ✅ 规则文件 `AGENTS.md` + `.aider.conf.yml` 自动加载;三组对照实验(2a 破坏 / 2b 拒绝 / 3 有权限仍拒绝);产出可复用**规则写法模板**;两次 git 事故复盘 |
 | **A1 / CLI-3** | ✅ OpenCode 1.18.31 对比完成;**抓到 `num_ctx` 默认 4096 的隐蔽坑**(模型支持 131072);定位 6GB 显存跑不动"8B 多模态模型 + 32K 上下文";验证规则注入与"知道 ≠ 遵守";权限门拦住违规且零破坏 |
+| **A2 / CLI-5~8** | ✅ 四字段规则卡 → 只读 review Skill → 任务拆解 → 跨工具对照卡;**抓到四类失败**:`Write` 整文件覆写清空内容、口头声称验证却从未调用 Bash、工具参数泄漏模板占位符 `{%include oldString%}`、整文件重写导致换行符 CRLF→LF;**核心结论:任务核心 portable,设置不 portable** |
 
 ### A1 自我检查对照
 
@@ -835,7 +948,7 @@ git ls-files <路径>                                      # 确认文件真的�
 - [x] **CLI-5**:四字段规则卡(用途 / 不可做 / 验证 / 回报)—— 含"能复述但不会遵守"的实测
 - [x] **CLI-6**:只读 review Skill —— 含"会加载但不会选工具"的能力边界实测
 - [x] **CLI-7**:任务拆解(盘点→修改→验证→回报)—— 含"Write 覆盖整文件"与"口头声称验证"两个实测
-- [ ] **CLI-8**(可选):portable prompt 对照卡
+- [x] **CLI-8**:portable prompt 对照卡完成 —— Aider vs OpenCode,**同模型单变量对比**;产物见 `a2-cli/cli-8/`
 - [ ] 后续主线:**Stage 5 → A3 → Stage 8**
 
 ### 备用方案(如果本地模型力不从心)
