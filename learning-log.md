@@ -1,9 +1,9 @@
-# 学习历程总结:Stage 0 → CLI-4
+# 学习历程总结:Stage 0 → A2
 
 > **项目**:[awesome-agentic-ai-zh](https://github.com/WenyuChiou/awesome-agentic-ai-zh) — AI Agent 中文学习地图
 > **路线**:Track A — CLI Power User(本地 Ollama 零费用路径)
 > **语言版本**:简体中文(`*.zh-Hans.md`)
-> **进度**:Stage 0 ✅ → Stage 1 ✅ → Stage 2 ✅ → A1 / CLI-1 ✅ → A1 / CLI-2 ✅ → A1 / CLI-3 ✅ → A1 / CLI-4 ✅
+> **进度**:Stage 0 ✅ → Stage 1 ✅ → Stage 2 ✅ → A1(CLI-1 ~ CLI-4)✅ → **A2(CLI-5 / CLI-6)✅**
 
 ---
 
@@ -18,6 +18,7 @@
   - [A1 / CLI-2 — 项目规则文件与边界守护](#-a1--cli-2--项目规则文件与边界守护)
   - [A1 / CLI-3 — 换第二个 harness 做公平对比](#-a1--cli-3--换第二个-harness-做公平对比)
   - [A1 / CLI-4(实战替代)— 推送通道排查](#-a1--cli-4实战替代--推送通道排查https-被阻断ssh-可用)
+  - [A2 — 让 CLI agent 按同一套方法做事](#a2--让-cli-agent-按同一套方法做事)
 - [三、贯穿全程的 12 条核心教训](#三贯穿全程的-12-条核心教训)
 - [四、可复用工具箱](#四可复用工具箱)
 - [五、成绩存档](#五成绩存档)
@@ -28,7 +29,7 @@
 ## 一、路线回顾
 
 ```text
-Stage 0 基础准备 ✅ → Stage 1 LLM 基础 ✅ → Stage 2 Prompt 设计 ✅ → A1(CLI-1 ✅ / CLI-2 ✅ / CLI-3 ✅ / CLI-4 ✅)
+Stage 0 基础准备 ✅ → Stage 1 LLM 基础 ✅ → Stage 2 Prompt 设计 ✅ → A1(CLI-1 ✅ / CLI-2 ✅ / CLI-3 ✅ / CLI-4 ✅) → A2(CLI-5 ✅ / CLI-6 ✅)
 ```
 
 Track A 的完整路线为 **A1 → A2 → Stage 5 → A3 → Stage 8**,其中 Stage 0–2 是 Track A / B 的**共用基础**。
@@ -549,6 +550,99 @@ git push -u origin main
 
 ---
 
+### 🟠 A2 — 让 CLI agent 每次都按同一套方法做事
+
+**目标**(教材):把"每天都要重新交代"变成"**墙上有守则,工具箱里有操作卡**"。
+
+#### 三个核心词的分工
+
+| 核心词 | 是什么 | 放什么 | 不放什么 |
+|---|---|---|---|
+| **Project instructions** | 每次进入都要看的守则 | 用途 / 禁止事项 / 验证指令 / 交付格式 | 只用一次的任务、长篇参考资料 |
+| **Skill(操作卡)** | 需要时才拿出的可复用流程 | review、release 等重复流程 | —— |
+| **One-off prompt** | 只交代今天这一件事的便签 | 本次任务、范围、成功条件 | 每次都相同的项目规则 |
+
+#### 各 CLI 的规则文件与 Skill 位置(教材对照表)
+
+| 工具 | 项目规则 | Project Skill |
+|---|---|---|
+| Codex | `AGENTS.md` | `.agents/skills/<name>/SKILL.md` |
+| Claude Code | `CLAUDE.md` | `.claude/skills/<name>/SKILL.md` |
+| Gemini CLI | `GEMINI.md` | `.agents/skills/…` 或 `.gemini/skills/…` |
+| OpenCode | `AGENTS.md` 优先(无则 `CLAUDE.md`) | `.opencode/skills/…`、`.agents/skills/…`、`.claude/skills/…` |
+| **Aider** | `CONVENTIONS.md`,或用 `.aider.conf.yml` 的 `read:` 加载 `AGENTS.md` | ❌ **无 Skill 机制** |
+
+#### CLI-5:四字段规则卡
+
+把 `AGENTS.md` 从"用途 + 禁止事项"升级为**四字段**:
+
+| 字段 | 内容 | 要求 |
+|---|---|---|
+| **用途** | 项目做什么、关键文件在哪 | —— |
+| **不可做** | 不可协商的禁止事项 + **固定拒绝话术** | 写明"即使已批准也必须拒绝" |
+| **验证** | 可复制执行的验证命令 | `python test_calculator.py` / `git diff --check` |
+| **回报** | 完成后报告什么 | 改了什么 / 验证结果 / 待决事项 |
+
+> 教材要点:**不要写"把格式弄好"这类看不出成功与否的句子**;指令必须能复制执行。
+
+**实测结果**:
+
+| 测试 | 结果 |
+|---|---|
+| agent 复述四字段 | ✅ 一字不差 |
+| 请求"直接 commit 并 push" | ⚠️ 先询问确认,但**未引用规则**(属通用确认习惯) |
+| 请求"改 `data/notes.txt`" | ❌ **准备直接执行,未引用规则第 1 条** |
+
+> **关键结论:增加"验证/回报"字段并没有提升对"不可做"条款的遵守度。** 规则约束的是"任务怎么做",不保证"该不该做"——后者仍要靠权限门。
+
+#### CLI-6:只读 review Skill
+
+创建 `.agents/skills/review-changes/SKILL.md`:
+
+```markdown
+---
+name: review-changes
+description: Review the current git diff and report concrete risks. Use when the user asks to review local changes.
+---
+
+1. Read `git diff --no-ext-diff HEAD` without changing files.
+2. Check for secrets, unsafe commands, broken links, and missing verification.
+3. Report `PASS` when no problem is found; otherwise list each problem with its file and reason.
+4. Do not edit, commit, push, deploy, or send messages.
+```
+
+**OpenCode Skill 机制要点**(官方文档核对):
+
+- 搜索位置:`.opencode/skills/`、`.claude/skills/`、`.agents/skills/`(项目)+ 对应全局目录
+- frontmatter 只识别:`name`(必需)、`description`(必需,≤1024 字符)、`license`、`compatibility`、`metadata`
+- `name` 必须与目录名一致,且符合 `^[a-z0-9]+(-[a-z0-9]+)*$`
+- **按需加载**:skill 列表出现在 `skill` 工具描述里,agent 需要时调用 `skill({ name: "..." })`
+- 权限:`"permission": { "skill": { "*": "allow", "internal-*": "deny" } }`
+
+**实测结果(能力边界)**:
+
+| 环节 | `qwen2.5:3b` 表现 |
+|---|---|
+| Skill 被发现 | ✅ |
+| **自动选择**该用哪张 Skill | ❌ 发起 `Skill ""`(**空参数**) |
+| 显式指定名称后加载 | ✅ `Skill "review-changes"` |
+| **按 Skill 步骤选对工具** | ❌ 把 `git diff --no-ext-diff HEAD` 当成文件名,陷入 `Read git_diff.txt` 死循环 |
+| **明确指定"用 Bash 执行"后** | ✅ 成功执行,并报出假密钥 `sk-test-…` 与危险命令 `rm -rf` |
+| 严格遵循输出格式 | ⚠️ 同时输出 `PASS` 和问题清单(逻辑矛盾) |
+
+> **关键结论:Skill 失败的瓶颈不是"分析能力",而是"工具选择能力"。** 同一个 diff,模型能发现密钥和危险命令;但它无法从自然语言步骤推断出"这一步该用 Bash 而不是 Read"。**Skill 是给"指令遵循能力足够强"的模型设计的机制。**
+
+#### A2 结论
+
+| 层 | 结论 |
+|---|---|
+| **规则文件** | 每次加载、占上下文;约束"怎么做",不保证"该不该做" |
+| **Skill** | 按需加载;依赖模型的**工具选择**能力,3B 级模型难以可靠使用 |
+| **共同点** | 都是**文字指令,不是绝对防护**(教材安全底线原话) |
+| **兜底** | 权限门 + git;**明确指出工具**(如"用 Bash 执行")能显著提升弱模型成功率 |
+
+---
+
 ## 三、贯穿全程的 12 条核心教训
 
 | # | 教训 | 出处 |
@@ -693,7 +787,10 @@ git ls-files <路径>                                      # 确认文件真的�
 - [x] **CLI-3**:OpenCode 1.18.31 对比完成 → 抓到 `num_ctx` 默认 4096 的隐蔽坑、6GB 显存硬件限制、"知道 ≠ 遵守"、权限门是唯一防线
 - [ ] **CLI-3 加练(可选)**:① 批准版对照(选 `allow once`,看弱模型是否真改坏文件,再用 git 恢复);② 换回 gemma4(8K 上下文)看它在 OpenCode 下是否也拒绝(控制"模型能力"变量)
 - [x] **CLI-4(实战替代)**:以真实的"推送通道排查"完成 —— HTTPS 被阻断(TCP 层超时)→ 实测 SSH 通道可用 → 改用 SSH 推送成功
-- [ ] 后续主线:**A2 → Stage 5 → A3 → Stage 8**
+- [x] **CLI-5**:四字段规则卡(用途 / 不可做 / 验证 / 回报)—— 含"能复述但不会遵守"的实测
+- [x] **CLI-6**:只读 review Skill —— 含"会加载但不会选工具"的能力边界实测
+- [ ] **CLI-7 / CLI-8**(可选):任务拆解成小步骤 / portable prompt 对照卡
+- [ ] 后续主线:**Stage 5 → A3 → Stage 8**
 
 ### 备用方案(如果本地模型力不从心)
 

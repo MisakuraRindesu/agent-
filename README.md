@@ -18,10 +18,13 @@
 | **A1 · CLI-1** | CLI Agent 实操:读取 → 计划 → 编辑 → `git diff` → 撤销 | ✅ |
 | **A1 · CLI-2** | 项目规则文件与边界守护(`AGENTS.md` + 三组对照实验) | ✅ |
 | **A1 · CLI-3** | 第二个 harness 公平对比(Aider vs OpenCode) | ✅ |
-| **A1 · CLI-4** | 假凭证认证失败实验 | ⬜ 纯本地路径无认证环节,待云端路径 |
-| **A2** | 建立可重复使用的 CLI 工作流程 | ⬜ 下一步 |
+| **A1 · CLI-4** | 推送通道排查(实战替代):HTTPS 被阻断 → SSH 可用 → 推送成功 | ✅ |
+| **A2 · CLI-5** | 四字段规则卡(用途 / 不可做 / 验证 / 回报) | ✅ |
+| **A2 · CLI-6** | 只读 review Skill(`.agents/skills/review-changes/`) | ✅ |
+| **A2 · CLI-7/8** | 任务拆解 / portable prompt 对照卡 | ⬜ 可选 |
+| **Stage 5** | Claude Code 生态:MCP / Skills / Plugins / Hooks / Subagents | ⬜ 下一站 |
 
-> 📖 **完整学习总结见 [`learning-log.md`](learning-log.md)** —— 包含每个 bug 的现象 / 原因 / 解决 / 教训,以及 11 条核心教训与可复用工具箱。
+> 📖 **完整学习总结见 [`learning-log.md`](learning-log.md)** —— 包含每个 bug 的现象 / 原因 / 解决 / 教训,以及 12 条核心教训与可复用工具箱。
 
 ---
 
@@ -30,7 +33,7 @@
 ```text
 .
 ├── README.md                       # 本文件：进度总览
-├── learning-log.md                 # 完整学习总结（11 条核心教训 + 工具速查）
+├── learning-log.md                 # 完整学习总结（12 条核心教训 + 工具速查）
 ├── stage0-foundations/             # Stage 0：GitHub API 数据小工具
 │   ├── github-profile.py
 │   └── result.txt
@@ -43,10 +46,11 @@
 │   ├── practice_2_2.py             #   Zero-Shot vs Few-Shot（六题评分）
 │   ├── practice_2_3.py             #   边界题 + Iterative Refinement
 │   └── practice_2_4.py             #   多轮统计版（3 轮平均分对比）
-└── a1-cli-agent/                   # A1：CLI Agent 实操的演示仓库
-    ├── AGENTS.md                   #   项目规则（禁止事项 + 拒绝话术）
+└── a1-cli-agent/                   # A1 / A2：CLI Agent 实操的演示仓库
+    ├── AGENTS.md                   #   项目规则（四字段：用途/不可做/验证/回报）
     ├── .aider.conf.yml             #   让 Aider 自动加载 AGENTS.md
     ├── opencode.json               #   OpenCode 配置（Ollama provider + 权限）
+    ├── .agents/skills/review-changes/SKILL.md   # A2：只读 review Skill
     ├── calculator.py               #   被测代码
     ├── test_calculator.py          #   单元测试
     ├── data/                       #   受保护目录（禁止 agent 修改）
