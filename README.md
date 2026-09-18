@@ -47,10 +47,17 @@
 │   ├── practice_2_2.py             #   Zero-Shot vs Few-Shot（六题评分）
 │   ├── practice_2_3.py             #   边界题 + Iterative Refinement
 │   └── practice_2_4.py             #   多轮统计版（3 轮平均分对比）
-├── a2-cli/cli-8/                   # A2 / CLI-8：portable prompt 对照卡
-│   ├── portable-prompt.md          #   四字段任务核心 + "哪些东西不 portable"
-│   ├── comparison-card.md          #   跨工具对照表 + 两轮成功条件判定
-│   └── evidence/                   #   两轮的 git diff 原始证据（Aider / OpenCode）
+├── a2-cli/                         # A2：四个动手练习的归档与手册
+│   ├── README.md                   #   练习总览 + 教材自查清单 + 四类失败汇总
+│   ├── cli-5/README.md             #   最小项目规则卡（四字段）
+│   ├── cli-6/README.md             #   只读 review Skill
+│   ├── cli-7/README.md             #   任务拆解 + Write 覆盖整文件事故复盘
+│   └── cli-8/                      #   portable prompt 对照卡
+│       ├── README.md               #     练习卡（教材成果/步骤 + 结果速览 + 五个坑）
+│       ├── portable-prompt.md      #     四字段任务核心 + "哪些东西不 portable"
+│       ├── comparison-card.md      #     跨工具对照表 + 两轮成功条件判定
+│       ├── proxy-probe.py          #     代理劫持诊断脚本
+│       └── evidence/               #     两轮的 git diff 原始证据（Aider / OpenCode）
 └── a1-cli-agent/                   # A1 / A2：CLI Agent 实操的演示仓库
     ├── AGENTS.md                   #   项目规则（四字段：用途/不可做/验证/回报）
     ├── .aider.conf.yml             #   让 Aider 自动加载 AGENTS.md
